@@ -1,0 +1,21 @@
+services:
+  - type: worker
+    name: xoyli-stars-bot
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python main.py
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: ADMIN_USERNAME
+        value: xoyli
+      - key: ADMIN_IDS
+        sync: false
+      - key: REQUIRED_CHANNEL
+        value: '@voodoo_channels'
+      - key: DB_PATH
+        value: /var/data/bot.sqlite3
+    disk:
+      name: xoyli-stars-data
+      mountPath: /var/data
+      sizeGB: 1
