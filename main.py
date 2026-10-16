@@ -25,7 +25,17 @@ dp = Dispatcher()
 
 
 def db():
-    con = sqlite3.connect(DB_PATH)
+    global DB_PATH
+    try:
+        con = sqlite3.connect(DB_PATH)
+    except sqlite3.OperationalError:
+        # If Render's persistent disk is missing or not mounted, use a
+        # writable local file so the bot can start (data may be temporary).
+        if DB_PATH == 'bot.sqlite3':
+            raise
+        logging.warning('Cannot open database at %s; falling back to local bot.sqlite3', DB_PATH)
+        DB_PATH = 'bot.sqlite3'
+        con = sqlite3.connect(DB_PATH)
     con.row_factory = sqlite3.Row
     return con
 
