@@ -6,6 +6,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 import aiosqlite
+from aiohttp import web
 from aiogram import Bot, Dispatcher, F, Router
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ChatMemberStatus, ParseMode
@@ -28,6 +29,24 @@ ADMIN_USERNAME = "xoyli"  # Telegram username, without @
 DEFAULT_REFERRAL_REWARD = 10
 
 router = Router()
+
+
+# -------------------- Health check for Render Web Service --------------------
+async def health_check(request: web.Request) -> web.Response:
+    return web.json_response({"status": "ok", "service": "WoodooGifi"})
+
+
+async def start_health_server() -> web.AppRunner:
+    app = web.Application()
+    app.router.add_get("/", health_check)
+    app.router.add_get("/healthz", health_check)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    port = int(os.getenv("PORT", "10000"))
+    site = web.TCPSite(runner, host="0.0.0.0", port=port)
+    await site.start()
+    logging.info("Health server listening on 0.0.0.0:%s", port)
+    return runner
 
 
 # -------------------- Database --------------------
@@ -225,9 +244,7 @@ def main_menu_keyboard(is_admin: bool = False):
 async def subscription_keyboard():
     builder = InlineKeyboardBuilder()
     for _, channel_id, invite_url in await get_channels():
-        label = channel_id
-        if label.startswith("@"):
-            label = label[1:]
+        label = channel_id[1:] if channel_id.startswith("@") else channel_id
         builder.row(InlineKeyboardButton(text=f"📢 {label}", url=invite_url))
     builder.row(
         InlineKeyboardButton(text="✅ Я подписался", callback_data="check_sub")
@@ -300,23 +317,22 @@ def parse_channel_input(raw: str) -> tuple[str, str] | None:
             username = path.split("/")[0]
             if re.fullmatch(r"[A-Za-z0-9_]{5,}", username):
                 return f"@{username}", f"https://t.me/{username}"
-        # Private invite link needs the numeric channel ID as well.
         return None
 
     if value.lstrip("-").isdigit():
-        # Numeric IDs are valid for checking, but cannot provide a join link by themselves.
         return value, ""
 
     return None
 
 
-async def add_channel(channel_id: str, invite_url: str) -> None:
+async def add_channel(channel_id: str, invite_url: str) -> bool:
     async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute(
+        cursor = await db.execute(
             "INSERT OR IGNORE INTO channels (channel_id, invite_url) VALUES (?, ?)",
             (channel_id, invite_url),
         )
         await db.commit()
+        return cursor.rowcount == 1
 
 
 # -------------------- Start and force subscribe --------------------
@@ -339,10 +355,10 @@ async def start_handler(message: Message, bot: Bot):
         return
 
     await mark_verified_and_pay_referrer(message.from_user.id)
-    await show_main_menu(message, bot)
+    await show_main_menu(message)
 
 
-async def show_main_menu(message: Message, bot: Bot):
+async def show_main_menu(message: Message):
     name = message.from_user.first_name or "друг"
     text = (
         "🌟 Добро пожаловать в WoodooGifi! 🌟\n\n"
@@ -533,12 +549,11 @@ async def admin_save_channel(message: Message, state: FSMContext):
         )
         return
 
-    try:
-        await add_channel(channel_id, invite_url)
-    except aiosqlite.IntegrityError:
-        await message.answer("Этот канал уже добавлен.")
-    else:
+    inserted = await add_channel(channel_id, invite_url)
+    if inserted:
         await message.answer(f"✅ Канал сохранён: {channel_id}")
+    else:
+        await message.answer("Этот канал уже добавлен.")
     await state.clear()
 
 
@@ -628,11 +643,15 @@ async def main() -> None:
     )
     dp = Dispatcher()
     dp.include_router(router)
+    runner = None
     try:
+        runner = await start_health_server()
         await bot.delete_webhook(drop_pending_updates=False)
         logging.info("WoodooGifi bot is starting...")
         await dp.start_polling(bot)
     finally:
+        if runner is not None:
+            await runner.cleanup()
         await bot.session.close()
 
 
