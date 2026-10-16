@@ -72,8 +72,10 @@ def get_channels():
 
 def main_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text='👥 Пригласить', callback_data='invite')],
-        [InlineKeyboardButton(text='💸 Вывести', callback_data='withdraw')],
+        [InlineKeyboardButton(text='👥 Пригласить', callback_data='invite'),
+         InlineKeyboardButton(text='⭐ Мой баланс', callback_data='balance')],
+        [InlineKeyboardButton(text='💸 Вывести', callback_data='withdraw'),
+         InlineKeyboardButton(text='❓ Помощь', callback_data='help')],
     ])
 
 
@@ -149,10 +151,50 @@ async def check_sub(call: CallbackQuery):
     if missing:
         await call.message.answer('Подписка пока не найдена. Подпишись на все каналы и попробуй снова.')
     else:
+        reward = reward_amount()
         with db() as con:
             con.execute('INSERT OR IGNORE INTO users(user_id, username, joined_at) VALUES(?,?,?)',
                         (call.from_user.id, call.from_user.username, datetime.now(timezone.utc).isoformat()))
+            ref = con.execute('SELECT inviter_id, rewarded FROM referrals WHERE invited_user_id=?',
+                              (call.from_user.id,)).fetchone()
+            if ref and not ref['rewarded']:
+                con.execute('UPDATE users SET balance=balance+? WHERE user_id=?',
+                            (reward, ref['inviter_id']))
+                con.execute('UPDATE referrals SET rewarded=1 WHERE invited_user_id=?',
+                            (call.from_user.id,))
         await call.message.answer('✅ Подписка подтверждена!', reply_markup=main_keyboard())
+
+
+@dp.callback_query(F.data == 'balance')
+async def balance(call: CallbackQuery):
+    if await subscription_status(call.from_user.id):
+        await call.answer('Сначала подпишись на обязательные каналы.', show_alert=True)
+        return
+    with db() as con:
+        row = con.execute('SELECT balance FROM users WHERE user_id=?', (call.from_user.id,)).fetchone()
+        count = con.execute('SELECT COUNT(*) AS n FROM referrals WHERE inviter_id=? AND rewarded=1',
+                            (call.from_user.id,)).fetchone()['n']
+    balance_value = row['balance'] if row else 0
+    await call.message.answer(
+        f'⭐ Твой баланс: {balance_value}\\n👥 Успешных приглашений: {count}\\n'
+        f'Награда за приглашение: ⭐ {reward_amount()}',
+        reply_markup=main_keyboard()
+    )
+    await call.answer()
+
+
+@dp.callback_query(F.data == 'help')
+async def help_menu(call: CallbackQuery):
+    await call.message.answer(
+        'ℹ️ Как пользоваться ботом:\\n'
+        '• «Пригласить» — получить свою ссылку и приглашать друзей.\\n'
+        '• «Мой баланс» — посмотреть баланс и успешные приглашения.\\n'
+        '• «Вывести» — отправить заявку администратору.\\n\\n'
+        'Баланс внутри бота не является автоматическим переводом Telegram Stars. '
+        'Заявки обрабатываются администратором вручную.',
+        reply_markup=main_keyboard()
+    )
+    await call.answer()
 
 
 @dp.callback_query(F.data == 'invite')
