@@ -176,7 +176,7 @@ async def balance(call: CallbackQuery):
                             (call.from_user.id,)).fetchone()['n']
     balance_value = row['balance'] if row else 0
     await call.message.answer(
-        f'⭐ Твой баланс: {balance_value}\\n👥 Успешных приглашений: {count}\\n'
+        f'⭐ Твой баланс: {balance_value}\n👥 Успешных приглашений: {count}\n'
         f'Награда за приглашение: ⭐ {reward_amount()}',
         reply_markup=main_keyboard()
     )
@@ -186,10 +186,10 @@ async def balance(call: CallbackQuery):
 @dp.callback_query(F.data == 'help')
 async def help_menu(call: CallbackQuery):
     await call.message.answer(
-        'ℹ️ Как пользоваться ботом:\\n'
-        '• «Пригласить» — получить свою ссылку и приглашать друзей.\\n'
-        '• «Мой баланс» — посмотреть баланс и успешные приглашения.\\n'
-        '• «Вывести» — отправить заявку администратору.\\n\\n'
+        'ℹ️ Как пользоваться ботом:\n'
+        '• «Пригласить» — получить свою ссылку и приглашать друзей.\n'
+        '• «Мой баланс» — посмотреть баланс и успешные приглашения.\n'
+        '• «Вывести» — отправить заявку администратору.\n\n'
         'Баланс внутри бота не является автоматическим переводом Telegram Stars. '
         'Заявки обрабатываются администратором вручную.',
         reply_markup=main_keyboard()
