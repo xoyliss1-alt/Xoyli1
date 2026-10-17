@@ -231,7 +231,6 @@ def main_menu_keyboard(is_admin: bool = False):
         InlineKeyboardButton(text="📤 Вывести звезды", callback_data="withdraw"),
     )
     builder.row(
-        InlineKeyboardButton(text="📊 Статистика", callback_data="stats"),
         InlineKeyboardButton(text="ℹ️ О проекте", callback_data="about"),
     )
     if is_admin:
@@ -457,24 +456,6 @@ async def withdraw_callback(callback: CallbackQuery):
     await callback.message.answer(
         "📤 <b>Вывод звёзд</b>\n\n"
         "Запрос вывода пока не подключён. Свяжись с администратором проекта для уточнения условий."
-    )
-    await callback.answer()
-
-
-@router.callback_query(F.data == "stats")
-async def stats_callback(callback: CallbackQuery):
-    async with aiosqlite.connect(DB_PATH) as db:
-        async with db.execute("SELECT COUNT(*) FROM users") as cursor:
-            users_count = (await cursor.fetchone())[0]
-        async with db.execute(
-            "SELECT COUNT(*) FROM referral_rewards WHERE referrer_id = ?",
-            (callback.from_user.id,),
-        ) as cursor:
-            referrals_count = (await cursor.fetchone())[0]
-    await callback.message.answer(
-        "📊 <b>Статистика</b>\n\n"
-        f"👥 Всего пользователей: {users_count}\n"
-        f"🤝 Твоих оплаченных рефералов: {referrals_count}"
     )
     await callback.answer()
 
