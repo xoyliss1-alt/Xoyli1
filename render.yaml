@@ -3,7 +3,7 @@ services:
     name: woodoogifi-bot
     runtime: python
     plan: free
-    buildCommand: pip install -r requirements.txt
+    buildCommand: python -m py_compile main.py && pip install -r requirements.txt
     startCommand: python main.py
     healthCheckPath: /healthz
     envVars:
